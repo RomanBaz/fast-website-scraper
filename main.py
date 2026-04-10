@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from scraper.crawler import crawl
 from scraper.models import (
@@ -18,11 +20,23 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Fast Website Scraper", version="1.0.0")
 
+API_KEY = os.environ.get("API_KEY", "")
+
+_security = HTTPBearer()
+
+
+async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(_security)) -> str:
+    if not API_KEY:
+        raise HTTPException(status_code=500, detail="API_KEY not configured on server")
+    if credentials.credentials != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return credentials.credentials
+
 jobs: dict[str, CrawlJob] = {}
 
 
 @app.post("/crawl", response_model=CrawlResponse, status_code=202)
-async def start_crawl(request: CrawlRequest):
+async def start_crawl(request: CrawlRequest, _key: str = Depends(verify_api_key)):
     """Start a new crawl job. Returns immediately with a job ID."""
     job = CrawlJob(url=str(request.url), max_pages=request.max_pages)
     jobs[job.job_id] = job
@@ -49,7 +63,7 @@ async def start_crawl(request: CrawlRequest):
 
 
 @app.get("/crawl/{job_id}", response_model=CrawlResponse)
-async def get_crawl_status(job_id: str):
+async def get_crawl_status(job_id: str, _key: str = Depends(verify_api_key)):
     """Check the status of a crawl job."""
     job = jobs.get(job_id)
     if not job:
@@ -66,7 +80,7 @@ async def get_crawl_status(job_id: str):
 
 
 @app.get("/crawl/{job_id}/results", response_model=CrawlResultResponse)
-async def get_crawl_results(job_id: str):
+async def get_crawl_results(job_id: str, _key: str = Depends(verify_api_key)):
     """Get full results of a completed crawl job."""
     job = jobs.get(job_id)
     if not job:
@@ -85,7 +99,7 @@ async def get_crawl_results(job_id: str):
 
 
 @app.delete("/crawl/{job_id}")
-async def delete_crawl_job(job_id: str):
+async def delete_crawl_job(job_id: str, _key: str = Depends(verify_api_key)):
     """Delete a crawl job and its results."""
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -94,7 +108,7 @@ async def delete_crawl_job(job_id: str):
 
 
 @app.get("/jobs", response_model=list[CrawlResponse])
-async def list_jobs():
+async def list_jobs(_key: str = Depends(verify_api_key)):
     """List all crawl jobs."""
     return [
         CrawlResponse(
@@ -111,8 +125,6 @@ async def list_jobs():
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
 
     port = int(os.environ.get("PORT", 8000))
