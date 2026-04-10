@@ -6,6 +6,7 @@ Async website crawler with a REST API. Crawls all pages of a given domain, extra
 
 - **Fast async crawling** with configurable concurrency (up to 50 parallel requests)
 - **REST API** powered by FastAPI with auto-generated Swagger docs
+- **API key authentication** — Bearer token auth on all endpoints
 - **URL filtering** — exclude or include pages by glob patterns
 - **Respects robots.txt** by default
 - **Rate limiting** — configurable delay between requests
@@ -15,17 +16,34 @@ Async website crawler with a REST API. Crawls all pages of a given domain, extra
 
 ```bash
 pip install -r requirements.txt
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+API_KEY=your-secret-key python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 API docs available at `http://localhost:8000/docs`
 
+## Authentication
+
+All endpoints require a Bearer token via the `API_KEY` environment variable.
+
+```bash
+curl -H "Authorization: Bearer your-secret-key" http://localhost:8000/jobs
+```
+
+| Scenario | Response |
+|----------|----------|
+| No token | `403 Not authenticated` |
+| Wrong token | `401 Invalid API key` |
+| `API_KEY` not set on server | `500 API_KEY not configured` |
+
 ## API
+
+All examples below include the required auth header.
 
 ### Start a crawl
 
 ```bash
 curl -X POST http://localhost:8000/crawl \
+  -H "Authorization: Bearer your-secret-key" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com",
@@ -51,13 +69,15 @@ Response (`202`):
 ### Check status
 
 ```bash
-curl http://localhost:8000/crawl/{job_id}
+curl -H "Authorization: Bearer your-secret-key" \
+  http://localhost:8000/crawl/{job_id}
 ```
 
 ### Get results
 
 ```bash
-curl http://localhost:8000/crawl/{job_id}/results
+curl -H "Authorization: Bearer your-secret-key" \
+  http://localhost:8000/crawl/{job_id}/results
 ```
 
 Response:
@@ -81,13 +101,15 @@ Response:
 ### List all jobs
 
 ```bash
-curl http://localhost:8000/jobs
+curl -H "Authorization: Bearer your-secret-key" \
+  http://localhost:8000/jobs
 ```
 
 ### Delete a job
 
 ```bash
-curl -X DELETE http://localhost:8000/crawl/{job_id}
+curl -X DELETE -H "Authorization: Bearer your-secret-key" \
+  http://localhost:8000/crawl/{job_id}
 ```
 
 ## URL Filtering
@@ -108,11 +130,19 @@ Patterns match against the URL path with slashes normalized.
 | `delay` | 0.2s | 0–10s | Delay between requests |
 | `respect_robots` | true | — | Honor robots.txt |
 
+## Deployment (Railway)
+
+1. Push to GitHub
+2. Create a new project on [railway.app](https://railway.app) from the repo
+3. Add the `API_KEY` environment variable in **Settings > Variables**
+4. Railway auto-detects Python + `Procfile` and deploys
+
 ## Project Structure
 
 ```
 fast-website-scraper/
 ├── main.py              # FastAPI application
+├── Procfile             # Railway deploy config
 ├── requirements.txt     # Dependencies
 └── scraper/
     ├── __init__.py
