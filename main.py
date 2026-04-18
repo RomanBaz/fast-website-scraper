@@ -25,6 +25,11 @@ API_KEY = os.environ.get("API_KEY", "")
 _security = HTTPBearer()
 
 
+@app.get("/")
+async def root():
+    return {"name": "Fast Website Scraper", "docs": "/docs", "status": "ok"}
+
+
 async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(_security)) -> str:
     if not API_KEY:
         raise HTTPException(status_code=500, detail="API_KEY not configured on server")
